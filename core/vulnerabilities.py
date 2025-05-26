@@ -1,56 +1,49 @@
-import re
+import subprocess
 
-# Dictionary of known Wi-Fi vulnerabilities and detections
-vuln_db = {
-    "sslv2": "❌ SSLv2 protocol detected — insecure, should be disabled.",
-    "sslv3": "❌ SSLv3 protocol detected — outdated and vulnerable.",
-    "tlsv1.0": "⚠️ TLS 1.0 detected — considered insecure; upgrade to TLS 1.2 or higher.",
-    "weak-ciphers": "❌ Weak encryption ciphers enabled, making your connection vulnerable.",
-    "self-signed": "⚠️ Self-signed SSL certificate found — may not be fully trusted or secure.",
-    "boa httpd": "⚠️ Router runs Boa HTTP Server — outdated and may have security flaws.",
-    "apache httpd": "ℹ️ Router uses Apache HTTP Server — ensure it is up to date.",
-    "nginx": "ℹ️ Router uses nginx server — check it's not outdated.",
-    "dnsmasq": "⚠️ dnsmasq DNS server detected — older versions have vulnerabilities.",
-    "bind": "⚠️ BIND DNS server detected — check for known vulnerabilities.",
-    "ftp": "❌ FTP port open — if anonymous/default credentials allowed, this is risky.",
-    "telnet": "❌ Telnet service detected — insecure and should be disabled.",
-    "ssh": "ℹ️ SSH service detected — ensure strong authentication is configured.",
-    "upnp": "⚠️ UPnP service detected — may expose device to external attacks.",
-    "snmp": "⚠️ SNMP service detected — verify community strings and access control.",
-    "wep": "❌ WEP encryption detected — very insecure, upgrade to WPA2/WPA3 immediately.",
-    "wpa1": "⚠️ WPA1 encryption detected — considered insecure, upgrade recommended.",
-    "default password": "❌ Default or weak credentials detected — change immediately.",
-    "traceroute": "ℹ️ Traceroute enabled — can reveal internal network information.",
-}
+def scan_ip(ip):
+    try:
+        result = subprocess.check_output(f"nmap -sV {ip}", shell=True).decode()
+        print(result)
+        return result
+    except Exception as e:
+        print(f"[-] Nmap scan failed: {e}")
+        return ""
 
-# Parser that checks the Nmap output against the dictionary
-def parse_nmap_output(output):
-    findings = []
-
+def interpret_vulnerabilities(scan_text):
     checks = {
-        "sslv2": r"sslv2",
-        "sslv3": r"sslv3",
-        "tlsv1.0": r"tlsv1\.0",
-        "weak-ciphers": r"weak ciphers|CBC|RC4|DES",
-        "self-signed": r"Self-signed|commonName=.*?/organizationName=.*?",
-        "boa httpd": r"Boa HTTPd",
-        "apache httpd": r"Apache.*http",
-        "nginx": r"nginx",
-        "dnsmasq": r"dnsmasq",
-        "bind": r"BIND",
-        "ftp": r"\b21/tcp\s+open",
-        "telnet": r"\b23/tcp\s+open",
-        "ssh": r"\b22/tcp\s+open",
-        "upnp": r"upnp|1900/udp",
-        "snmp": r"snmp|161/udp",
-        "wep": r"Encryption key:on.+WEP",
-        "wpa1": r"WPA Version 1",
-        "default password": r"default credentials|admin:admin|user:user|password:password",
-        "traceroute": r"TRACEROUTE",
+        "sslv2": "❌ SSLv2 protocol detected — insecure, should be disabled.",
+        "sslv3": "❌ SSLv3 protocol detected — outdated and vulnerable.",
+        "tlsv1.0": "⚠️ TLS 1.0 detected — upgrade to TLS 1.2 or higher.",
+        "tlsv1.1": "⚠️ TLS 1.1 detected — also considered insecure.",
+        "weak-ciphers": "❌ Weak encryption ciphers enabled — easily cracked.",
+        "self-signed": "⚠️ Self-signed SSL certificate — not trusted by browsers.",
+        "boa": "❌ Boa HTTP server detected — outdated and vulnerable.",
+        "apache": "ℹ️ Apache server found — ensure it's updated.",
+        "nginx": "ℹ️ nginx server — check version for vulnerabilities.",
+        "dnsmasq": "⚠️ dnsmasq found — older versions are vulnerable to DNS attacks.",
+        "bind": "⚠️ BIND DNS server — check CVEs for known issues.",
+        "ftp": "❌ FTP open — risky if anonymous/default credentials allowed.",
+        "telnet": "❌ Telnet open — unencrypted, should be disabled.",
+        "ssh": "ℹ️ SSH found — use strong passwords and key authentication.",
+        "upnp": "⚠️ UPnP found — can expose internal services to internet.",
+        "snmp": "⚠️ SNMP enabled — check default community strings.",
+        "wep": "❌ WEP encryption used — crackable within minutes.",
+        "wpa1": "⚠️ WPA1 in use — upgrade to WPA2/WPA3.",
+        "default password": "❌ Default credentials detected — change immediately.",
+        "traceroute": "ℹ️ Traceroute enabled — can leak internal network info.",
+        "open port 23": "❌ Telnet port 23 open — insecure, should be disabled.",
+        "open port 21": "❌ FTP port 21 open — should be closed unless needed.",
+        "open port 80": "ℹ️ Web server running on port 80 — check for vulnerabilities.",
+        "open port 443": "ℹ️ HTTPS enabled — ensure SSL/TLS is strong.",
+        "open port 53": "ℹ️ DNS service running — check for DNS hijacking risks.",
+        "open port 1900": "⚠️ UPnP service on port 1900 — check if exposed to WAN.",
     }
 
-    for key, pattern in checks.items():
-        if re.search(pattern, output, re.IGNORECASE):
-            findings.append((key, vuln_db[key]))
-
+    scan_lower = scan_text.lower()
+    findings = []
+    for pattern, explanation in checks.items():
+        if pattern in scan_lower:
+            findings.append(explanation)
+    if not findings:
+        findings.append("✅ No obvious vulnerabilities found. Perform manual analysis for deeper issues.")
     return findings
